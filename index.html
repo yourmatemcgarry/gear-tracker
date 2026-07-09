@@ -123,7 +123,7 @@
       </div>
       <div class="card">
         <h2>Currently checked out</h2>
-        <table><thead><tr><th>Equipment</th><th>Qty</th><th>Event</th><th>Since</th></tr></thead>
+        <table><thead><tr><th>Equipment</th><th>Qty</th><th>Event / Location</th><th>Since</th></tr></thead>
         <tbody id="checkedOutBody"></tbody></table>
       </div>
     </div>
@@ -212,6 +212,27 @@
         <tbody id="inventoryBody"></tbody>
       </table>
     </div>
+
+    <div class="card">
+      <h2>Log gear at a location <span class="muted" style="font-weight:400;font-size:12px;">— for stock you're loading in as already out, or gear taken without a booking</span></h2>
+      <div class="row">
+        <div class="field"><label>Equipment</label><select id="mhEquipment"></select></div>
+        <div class="field"><label>Qty</label><input type="number" id="mhQty" min="1" value="1" style="width:70px;"></div>
+        <div class="field"><label>Location</label><input id="mhLocation" placeholder="e.g. Dave's shed, Warehouse annex"></div>
+        <div class="field"><label>Since</label><input type="date" id="mhDate"></div>
+        <div class="field"><label>Note (optional)</label><input id="mhNote" placeholder="e.g. taken without checkout"></div>
+        <button class="btn amber" id="addHoldBtn">Log it</button>
+      </div>
+      <div id="mhMsg" class="muted"></div>
+    </div>
+
+    <div class="card">
+      <h2>Gear currently held without a booking</h2>
+      <table>
+        <thead><tr><th>Equipment</th><th>Qty</th><th>Location</th><th>Since</th><th>Note</th><th></th></tr></thead>
+        <tbody id="manualHoldsBody"></tbody>
+      </table>
+    </div>
   </div>
 
   <!-- EQUIPMENT -->
@@ -294,7 +315,7 @@ function escapeAttr(str){
 
 // ---------- starting data: blank slate, ready for real inventory & events ----------
 function blankDoc(){
-  return { equipment: [], events: [], bookings: [], retirements: [], version: 0 };
+  return { equipment: [], events: [], bookings: [], retirements: [], manualHolds: [], version: 0 };
 }
 
 let DATA = blankDoc();
@@ -378,23 +399,49 @@ function bookingOccupiesDate(bk, dateStr){
   return dateStr >= start;
 }
 
+// A manual hold (gear logged at a location without a formal booking) occupies
+// its equipment from its start date onward, until returned to storage.
+function manualHoldOccupiesDate(mh, dateStr){
+  if(mh.status === "returned"){
+    if(!mh.date || !mh.dateReturned) return false;
+    return dateStr >= mh.date && dateStr < mh.dateReturned;
+  }
+  if(!mh.date) return false;
+  return dateStr >= mh.date;
+}
+
 function availabilityForDate(dateStr, excludeBookingId){
-  // returns array of {equipment, total, occupied, available, occupiedBy:[{event, qty, bookingStatus}]}
+  // returns array of {equipment, total, occupied, available, occupiedBy:[{kind, event|location, qty, status, since}]}
   return DATA.equipment.map(eq=>{
     const occ = DATA.bookings.filter(bk=>bk.equipmentId===eq.id && bk.id!==excludeBookingId && bookingOccupiesDate(bk,dateStr));
     const occupiedQty = occ.reduce((s,bk)=>s+Number(bk.qty),0);
     const occupiedBy = occ.map(bk=>({
+      kind: "booking",
       event: getEvent(bk.eventId),
       qty: bk.qty,
       status: bk.status,
       since: bk.checkOutDate || (getEvent(bk.eventId)||{}).start
     }));
+
+    const holds = (DATA.manualHolds||[]).filter(mh=>mh.equipmentId===eq.id && manualHoldOccupiesDate(mh, dateStr));
+    const holdQty = holds.reduce((s,mh)=>s+Number(mh.qty),0);
+    const holdBy = holds.map(mh=>({
+      kind: "manual",
+      holdId: mh.id,
+      location: mh.location,
+      note: mh.note,
+      qty: mh.qty,
+      status: "manual",
+      since: mh.date
+    }));
+
+    const totalOccupied = occupiedQty + holdQty;
     return {
       equipment: eq,
       total: eq.qty,
-      occupied: occupiedQty,
-      available: Math.max(0, eq.qty - occupiedQty),
-      occupiedBy
+      occupied: totalOccupied,
+      available: Math.max(0, eq.qty - totalOccupied),
+      occupiedBy: [...occupiedBy, ...holdBy]
     };
   });
 }
@@ -436,9 +483,12 @@ function computeAlerts(asOf){
       const avail = availabilityForDate(ev.start, bk.id).find(a=>a.equipment.id===eq.id);
       if(avail.available < bk.qty){
         // find what's holding up the gear (an unreturned/uncompleted booking of same equipment, elsewhere)
-        const blockers = avail.occupiedBy.filter(o=>o.event.id !== ev.id);
-        const notReturned = blockers.filter(o=>o.status === "checked_out");
-        const blockerText = blockers.map(b=>`"${b.event.name}" (${b.status==='checked_out'?'out since '+fmt(b.since):'also booked'})`).join(", ");
+        const blockers = avail.occupiedBy.filter(o=>o.kind==="manual" || o.event.id !== ev.id);
+        const notReturned = blockers.filter(o=>o.kind==="manual" || o.status === "checked_out");
+        const blockerText = blockers.map(b=>{
+          if(b.kind==="manual") return `"${b.location}" (no booking, held since ${fmt(b.since)})`;
+          return `"${b.event.name}" (${b.status==='checked_out'?'out since '+fmt(b.since):'also booked'})`;
+        }).join(", ");
         alerts.push({
           type:"shortage",
           severity:"bad",
@@ -507,12 +557,19 @@ function renderDashboard(){
     return `<tr><td>${ev.name}</td><td>${fmt(ev.start)}${ev.end!==ev.start?" – "+fmt(ev.end):""} ${tag}</td><td>${ev.location}</td><td>${eventGearStatus(ev,asOf)}</td></tr>`;
   }).join("") || `<tr><td colspan="4" class="empty">No upcoming events</td></tr>`;
 
-  // currently checked out table
-  const out = DATA.bookings.filter(bk=>bk.status==="checked_out");
-  document.getElementById("checkedOutBody").innerHTML = out.map(bk=>{
+  // currently checked out table (bookings + manual holds)
+  const out = DATA.bookings.filter(bk=>bk.status==="checked_out").map(bk=>{
     const eq = getEquipment(bk.equipmentId), ev = getEvent(bk.eventId);
-    return `<tr><td>${eq.name}</td><td>${bk.qty}</td><td>${ev.name}</td><td>${fmt(bk.checkOutDate)}</td></tr>`;
-  }).join("") || `<tr><td colspan="4" class="empty">Nothing checked out</td></tr>`;
+    return { name: eq.name, qty: bk.qty, place: ev.name, since: bk.checkOutDate };
+  });
+  const holdsOut = (DATA.manualHolds||[]).filter(mh=>mh.status!=="returned").map(mh=>{
+    const eq = getEquipment(mh.equipmentId);
+    return { name: eq ? eq.name : "(deleted item)", qty: mh.qty, place: `${mh.location} (no booking)`, since: mh.date };
+  });
+  const allOut = [...out, ...holdsOut];
+  document.getElementById("checkedOutBody").innerHTML = allOut.map(o=>
+    `<tr><td>${o.name}</td><td>${o.qty}</td><td>${o.place}</td><td>${fmt(o.since)}</td></tr>`
+  ).join("") || `<tr><td colspan="4" class="empty">Nothing checked out</td></tr>`;
 }
 
 function eventGearStatus(ev, asOf){
@@ -531,7 +588,10 @@ function renderAvailability(){
     const pct = row.total ? Math.round((row.available/row.total)*100) : 0;
     const barClass = row.available===0 ? "none" : (pct<=30 ? "low" : "");
     const bookedTo = row.occupiedBy.length
-      ? `<div class="pill-list">${row.occupiedBy.map(o=>`<span>${o.event.name} (x${o.qty}${o.status==='checked_out'?', out':o.status==='booked'?', booked':''})</span>`).join("")}</div>`
+      ? `<div class="pill-list">${row.occupiedBy.map(o=>{
+          const label = o.kind==="manual" ? `${o.location} (x${o.qty}, no booking)` : `${o.event.name} (x${o.qty}${o.status==='checked_out'?', out':o.status==='booked'?', booked':''})`;
+          return `<span>${label}</span>`;
+        }).join("")}</div>`
       : `<span class="muted">—</span>`;
     return `<tr>
       <td><strong>${row.equipment.name}</strong><div class="muted" style="font-size:11px;">${row.equipment.category}</div></td>
@@ -725,7 +785,12 @@ function renderInventory(){
   const data = availabilityForDate(dateStr);
   document.getElementById("inventoryBody").innerHTML = data.map(row=>{
     const detail = row.occupiedBy.length
-      ? row.occupiedBy.map(o=>`${o.qty}x → <strong>${o.event.name}</strong> (${o.event.location}), out since ${fmt(o.since)}${o.status==='booked'?' <span class="badge neutral" style="font-size:10px;">planned</span>':''}`).join("<br>")
+      ? row.occupiedBy.map(o=>{
+          if(o.kind==="manual"){
+            return `${o.qty}x → <strong>${o.location}</strong> <span class="badge warn" style="font-size:10px;">no booking</span>, since ${fmt(o.since)}${o.note?` — ${o.note}`:""} <button class="link-btn" onclick="returnManualHold('${o.holdId}')">return to storage</button>`;
+          }
+          return `${o.qty}x → <strong>${o.event.name}</strong> (${o.event.location}), out since ${fmt(o.since)}${o.status==='booked'?' <span class="badge neutral" style="font-size:10px;">planned</span>':''}`;
+        }).join("<br>")
       : `<span class="muted">All units in storage</span>`;
     return `<tr>
       <td><strong>${row.equipment.name}</strong></td>
@@ -735,6 +800,57 @@ function renderInventory(){
       <td>${detail}</td>
     </tr>`;
   }).join("") || `<tr><td colspan="5" class="empty">No equipment yet — add some on the Equipment tab.</td></tr>`;
+}
+
+function populateHoldEquipmentSelect(){
+  const sel = document.getElementById("mhEquipment");
+  if(!sel) return;
+  const current = sel.value;
+  sel.innerHTML = DATA.equipment.map(e=>`<option value="${e.id}">${e.name}</option>`).join("");
+  if(current && DATA.equipment.some(e=>e.id===current)) sel.value = current;
+}
+
+function renderManualHolds(){
+  populateHoldEquipmentSelect();
+  const addBtn = document.getElementById("addHoldBtn");
+  addBtn.disabled = DATA.equipment.length === 0;
+
+  const holds = (DATA.manualHolds||[]).filter(mh=>mh.status!=="returned").slice().sort((a,b)=>a.date.localeCompare(b.date));
+  document.getElementById("manualHoldsBody").innerHTML = holds.map(mh=>{
+    const eq = getEquipment(mh.equipmentId);
+    return `<tr>
+      <td>${eq ? eq.name : "(deleted item)"}</td>
+      <td>${mh.qty}</td>
+      <td>${mh.location}</td>
+      <td>${fmt(mh.date)}</td>
+      <td class="muted">${mh.note||""}</td>
+      <td><button class="btn small green" onclick="returnManualHold('${mh.id}')">Return to storage</button></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="6" class="empty">Nothing currently held outside a booking.</td></tr>`;
+}
+
+function returnManualHold(id){
+  const mh = (DATA.manualHolds||[]).find(h=>h.id===id);
+  if(!mh) return;
+  const input = prompt(`How many are being returned to storage? (max ${mh.qty})`, mh.qty);
+  if(input === null) return;
+  let qty = Number(input);
+  if(!qty || qty<=0 || isNaN(qty)){ toast("Enter a valid quantity."); return; }
+  if(qty > mh.qty) qty = mh.qty;
+
+  if(qty >= mh.qty){
+    mh.status = "returned";
+    mh.dateReturned = currentAsOf();
+  } else {
+    DATA.manualHolds.push({
+      id: uid("mh"), equipmentId: mh.equipmentId, qty,
+      location: mh.location, note: mh.note, date: mh.date,
+      status: "returned", dateReturned: currentAsOf()
+    });
+    mh.qty -= qty;
+  }
+  renderAll(); saveData();
+  toast("Returned to storage.");
 }
 
 let editingEquipmentId = null;
@@ -924,6 +1040,7 @@ function renderAll(){
   renderBookingForm();
   renderCheckInOut();
   renderInventory();
+  renderManualHolds();
   renderEquipment();
   renderEvents();
 }
@@ -932,6 +1049,7 @@ function renderAll(){
 document.getElementById("asOfDate").value = REAL_TODAY;
 document.getElementById("checkDate").value = REAL_TODAY;
 document.getElementById("invDate").value = REAL_TODAY;
+document.getElementById("mhDate").value = REAL_TODAY;
 document.getElementById("asOfDate").addEventListener("change", renderAll);
 document.getElementById("checkDate").addEventListener("input", renderAvailability);
 document.getElementById("invDate").addEventListener("input", renderInventory);
@@ -996,6 +1114,29 @@ document.getElementById("createBookingBtn").addEventListener("click", ()=>{
   toast("Booking saved.");
 });
 
+document.getElementById("addHoldBtn").addEventListener("click", ()=>{
+  const eqId = document.getElementById("mhEquipment").value;
+  const qty = Number(document.getElementById("mhQty").value);
+  const location = document.getElementById("mhLocation").value.trim();
+  const date = document.getElementById("mhDate").value || currentAsOf();
+  const note = document.getElementById("mhNote").value.trim();
+  const msg = document.getElementById("mhMsg");
+
+  if(!eqId){ msg.textContent = "Add equipment on the Equipment tab first."; msg.style.color = "var(--red)"; return; }
+  if(!qty || qty<=0 || isNaN(qty)){ msg.textContent = "Enter a valid quantity."; msg.style.color = "var(--red)"; return; }
+  if(!location){ msg.textContent = "Enter a location."; msg.style.color = "var(--red)"; return; }
+
+  DATA.manualHolds = DATA.manualHolds || [];
+  DATA.manualHolds.push({ id: uid("mh"), equipmentId: eqId, qty, location, date, note, status: "active", dateReturned: null });
+  msg.textContent = "Logged ✅";
+  msg.style.color = "var(--green)";
+  document.getElementById("mhLocation").value = "";
+  document.getElementById("mhNote").value = "";
+  document.getElementById("mhQty").value = 1;
+  renderAll(); saveData();
+  toast("Gear logged at location.");
+});
+
 document.getElementById("addEqBtn").addEventListener("click", ()=>{
   const name = document.getElementById("eqName").value.trim();
   const category = document.getElementById("eqCategory").value.trim() || "General";
@@ -1030,7 +1171,7 @@ document.getElementById("addEvBtn").addEventListener("click", ()=>{
 
 document.getElementById("resetDataBtn").addEventListener("click", ()=>{
   if(!confirm("This will permanently erase ALL equipment, events and bookings for EVERYONE using this tracker and start blank. This cannot be undone. Continue?")) return;
-  DATA = { equipment: [], events: [], bookings: [], retirements: [], version: DATA.version };
+  DATA = { equipment: [], events: [], bookings: [], retirements: [], manualHolds: [], version: DATA.version };
   renderAll();
   saveData();
   toast("All data cleared.");

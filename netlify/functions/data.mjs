@@ -1,5 +1,5 @@
 // Netlify Function — shared backend for the Event Gear Tracker.
-// Stores one JSON document (equipment / events / bookings / retirements) in
+// Stores one JSON document (equipment / events / bookings / retirements / manualHolds) in
 // Netlify Blobs so every user hitting the site sees the same live data.
 //
 // GET  /api/data   -> returns the current document
@@ -15,7 +15,7 @@ import { getStore } from "@netlify/blobs";
 const KEY = "gear-tracker-data";
 
 function blankDoc() {
-  return { equipment: [], events: [], bookings: [], retirements: [], version: 0 };
+  return { equipment: [], events: [], bookings: [], retirements: [], manualHolds: [], version: 0 };
 }
 
 function json(body, status = 200) {
@@ -62,6 +62,7 @@ export default async (req, context) => {
       events: incoming.events || [],
       bookings: incoming.bookings || [],
       retirements: incoming.retirements || [],
+      manualHolds: incoming.manualHolds || [],
       version: (current.version || 0) + 1,
     };
 
