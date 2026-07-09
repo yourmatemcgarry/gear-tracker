@@ -1,0 +1,10 @@
+{
+  "name": "event-gear-tracker",
+  "version": "1.0.0",
+  "description": "Event gear booking & tracking tool with a shared Netlify Blobs backend",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}

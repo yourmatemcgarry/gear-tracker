@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Event Gear Tracker</title>
+<style>
+  :root{
+    --navy:#1b2a4a; --navy-dark:#12203a; --amber:#e8952f; --amber-dark:#c97c1e;
+    --green:#2f9e58; --red:#c94a3a; --yellow:#d9a520; --bg:#f4f5f7; --card:#ffffff;
+    --border:#e1e4ea; --text:#22262e; --muted:#6b7280;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  header{background:var(--navy);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  header h1{font-size:19px;margin:0;font-weight:600;letter-spacing:.2px;}
+  header .sub{font-size:12px;color:#b7c0d8;margin-top:2px;}
+  nav{display:flex;gap:4px;background:var(--navy-dark);padding:0 20px;flex-wrap:wrap;}
+  nav button{background:none;border:none;color:#cdd4e4;padding:12px 16px;font-size:13.5px;cursor:pointer;border-bottom:3px solid transparent;font-weight:500;}
+  nav button:hover{color:#fff;}
+  nav button.active{color:#fff;border-bottom:3px solid var(--amber);}
+  main{padding:22px 24px 60px;max-width:1200px;margin:0 auto;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin-bottom:16px;}
+  .card h2{margin:0 0 12px;font-size:15px;color:var(--navy);}
+  .card h3{margin:0 0 8px;font-size:13.5px;color:var(--navy);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  @media(max-width:800px){.grid2,.grid3{grid-template-columns:1fr;}}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;padding:8px 10px;background:#f7f8fa;color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--border);}
+  td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  input,select{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13.5px;background:#fff;color:var(--text);}
+  input:focus,select:focus{outline:2px solid var(--amber);outline-offset:0;border-color:var(--amber);}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px;font-weight:500;}
+  .field{margin-bottom:12px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+  button.btn{background:var(--navy);color:#fff;border:none;padding:9px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600;}
+  button.btn:hover{background:var(--navy-dark);}
+  button.btn.amber{background:var(--amber);}
+  button.btn.amber:hover{background:var(--amber-dark);}
+  button.btn.green{background:var(--green);}
+  button.btn.red{background:var(--red);}
+  button.btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--border);}
+  button.btn.small{padding:5px 10px;font-size:12px;}
+  button.btn:disabled{opacity:.45;cursor:not-allowed;}
+  .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.2px;}
+  .badge.ok{background:#e4f5ea;color:var(--green);}
+  .badge.warn{background:#fdf1dd;color:var(--yellow);}
+  .badge.bad{background:#fbe9e6;color:var(--red);}
+  .badge.info{background:#e8ecf6;color:var(--navy);}
+  .badge.neutral{background:#eee;color:var(--muted);}
+  .alert{border-radius:8px;padding:12px 14px;margin-bottom:10px;font-size:13px;display:flex;gap:10px;align-items:flex-start;}
+  .alert.bad{background:#fbe9e6;border:1px solid #f1c6bd;}
+  .alert.warn{background:#fdf1dd;border:1px solid #f2ddab;}
+  .alert strong{display:block;margin-bottom:2px;}
+  .muted{color:var(--muted);}
+  .stat{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:left;}
+  .stat .num{font-size:26px;font-weight:700;color:var(--navy);}
+  .stat .lbl{font-size:12px;color:var(--muted);margin-top:2px;}
+  .stat.bad .num{color:var(--red);}
+  .stat.warn .num{color:var(--yellow);}
+  .avail-bar{height:6px;border-radius:3px;background:#e9ebef;overflow:hidden;margin-top:5px;}
+  .avail-bar > div{height:100%;background:var(--green);}
+  .avail-bar.low > div{background:var(--yellow);}
+  .avail-bar.none > div{background:var(--red);}
+  .pill-list span{display:inline-block;background:#eef0f4;border-radius:5px;padding:2px 7px;margin:2px 4px 2px 0;font-size:11.5px;color:var(--navy);}
+  .empty{color:var(--muted);font-size:13px;padding:14px 0;text-align:center;}
+  .toast{position:fixed;bottom:20px;right:20px;background:var(--navy);color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.2);z-index:50;animation:fadein .2s;}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+  .flex-between{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+  .link-btn{background:none;border:none;color:var(--navy);text-decoration:underline;cursor:pointer;font-size:12.5px;padding:0;}
+  select.qty{width:70px;}
+  .booking-line{display:grid;grid-template-columns:2fr 100px 1fr auto;gap:8px;align-items:end;margin-bottom:8px;}
+  .today-tag{background:var(--amber);color:#fff;font-size:10.5px;padding:1px 6px;border-radius:4px;margin-left:6px;}
+  .actions-cell{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:230px;}
+  .mini-input{width:96px;padding:6px 8px;font-size:12px;}
+  .who{font-size:11px;color:var(--muted);margin-top:2px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🏕️ Event Gear Tracker</h1>
+    <div class="sub">Your Mates Brewing — equipment booking &amp; tracking</div>
+  </div>
+  <div class="row" style="align-items:center;">
+    <div>
+      <label style="color:#b7c0d8;">Viewing as of</label>
+      <input type="date" id="asOfDate">
+    </div>
+    <button class="btn ghost" id="resetDataBtn" style="background:transparent;color:#fff;border:1px solid #45507a;">Clear all data</button>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button data-view="dashboard" class="active">Dashboard</button>
+  <button data-view="availability">Check Availability &amp; Book</button>
+  <button data-view="checkinout">Check-Out / Check-In</button>
+  <button data-view="inventory">Where's My Gear</button>
+  <button data-view="equipment">Equipment</button>
+  <button data-view="events">Events</button>
+</nav>
+
+<main>
+
+  <!-- DASHBOARD -->
+  <div class="view active" id="view-dashboard">
+    <div class="grid3" id="statCards" style="margin-bottom:16px;"></div>
+
+    <div class="card">
+      <h2>⚠️ Alerts</h2>
+      <div id="alertsBox"></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Upcoming events</h2>
+        <table><thead><tr><th>Event</th><th>Date</th><th>Location</th><th>Status</th></tr></thead>
+        <tbody id="upcomingEventsBody"></tbody></table>
+      </div>
+      <div class="card">
+        <h2>Currently checked out</h2>
+        <table><thead><tr><th>Equipment</th><th>Qty</th><th>Event</th><th>Since</th></tr></thead>
+        <tbody id="checkedOutBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- AVAILABILITY / BOOKING -->
+  <div class="view" id="view-availability">
+    <div class="card">
+      <h2>Check availability for a date</h2>
+      <div class="row">
+        <div class="field">
+          <label>Date to check</label>
+          <input type="date" id="checkDate">
+        </div>
+      </div>
+      <table style="margin-top:8px;">
+        <thead><tr><th>Equipment</th><th>Total</th><th>Available</th><th>Booked to</th></tr></thead>
+        <tbody id="availabilityBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Create a new booking</h2>
+      <div class="grid2">
+        <div>
+          <div class="field">
+            <label>Event</label>
+            <select id="bookEventSelect"></select>
+          </div>
+          <div id="newEventFields" style="display:none;">
+            <div class="field"><label>New event name</label><input id="newEventName" placeholder="e.g. Smith Wedding"></div>
+            <div class="row">
+              <div class="field"><label>Start date</label><input type="date" id="newEventStart"></div>
+              <div class="field"><label>End date</label><input type="date" id="newEventEnd"></div>
+            </div>
+            <div class="field"><label>Location</label><input id="newEventLocation" placeholder="e.g. Riverside Park"></div>
+          </div>
+        </div>
+        <div>
+          <label>Add equipment lines</label>
+          <div id="bookingLines"></div>
+          <button class="btn ghost small" id="addLineBtn">+ Add equipment</button>
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button class="btn amber" id="createBookingBtn">Create booking</button>
+        <span id="bookingMsg" class="muted" style="margin-left:10px;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHECK IN/OUT -->
+  <div class="view" id="view-checkinout">
+    <div class="card">
+      <div class="flex-between">
+        <h2>All bookings</h2>
+        <div class="row">
+          <select id="filterStatus">
+            <option value="">All statuses</option>
+            <option value="booked">Booked (not out yet)</option>
+            <option value="checked_out">Checked out</option>
+            <option value="checked_in">Checked in / returned</option>
+          </select>
+          <select id="filterEvent"><option value="">All events</option></select>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Event</th><th>Equipment</th><th>Qty</th><th>Event date</th><th>Status</th><th>Checked out</th><th>Checked in</th><th></th></tr></thead>
+        <tbody id="bookingsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- INVENTORY -->
+  <div class="view" id="view-inventory">
+    <div class="card">
+      <div class="flex-between">
+        <h2>Where's my gear?</h2>
+        <div class="field" style="margin:0;">
+          <label>As of date</label>
+          <input type="date" id="invDate">
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Equipment</th><th>Total</th><th>In storage</th><th>Out (event)</th><th>Location detail</th></tr></thead>
+        <tbody id="inventoryBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EQUIPMENT -->
+  <div class="view" id="view-equipment">
+    <div class="card">
+      <h2>Equipment inventory</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Category</th><th>Total qty</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="equipmentBody"></tbody>
+      </table>
+      <h3 style="margin-top:18px;">Add equipment</h3>
+      <div class="row">
+        <div class="field"><label>Name</label><input id="eqName" placeholder="e.g. Gazebo 3x3m"></div>
+        <div class="field"><label>Category</label><input id="eqCategory" placeholder="e.g. Shelter"></div>
+        <div class="field"><label>Total qty</label><input id="eqQty" type="number" min="1" value="1" style="width:80px;"></div>
+        <div class="field"><label>Notes</label><input id="eqNotes" placeholder="optional"></div>
+        <button class="btn amber" id="addEqBtn">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Retirement log <span class="muted" style="font-weight:400;font-size:12px;">— units removed from stock (broken / sold / lost)</span></h2>
+      <table>
+        <thead><tr><th>Date</th><th>Equipment</th><th>Reason</th><th>Note</th></tr></thead>
+        <tbody id="retirementsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EVENTS -->
+  <div class="view" id="view-events">
+    <div class="card">
+      <h2>Events</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Location</th><th>Gear booked</th><th></th></tr></thead>
+        <tbody id="eventsBody"></tbody>
+      </table>
+      <h3 style="margin-top:18px;">Add event</h3>
+      <div class="row">
+        <div class="field"><label>Name</label><input id="evName" placeholder="e.g. Spring Fair"></div>
+        <div class="field"><label>Start date</label><input type="date" id="evStart"></div>
+        <div class="field"><label>End date</label><input type="date" id="evEnd"></div>
+        <div class="field"><label>Location</label><input id="evLocation" placeholder="e.g. Town Square"></div>
+        <button class="btn amber" id="addEvBtn">Add</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+/* ---------------------------------------------------------
+   EVENT GEAR TRACKER
+   All data stored in the browser's localStorage — no backend required.
+   Dates are plain ISO strings (YYYY-MM-DD), compared as strings.
+   Note: localStorage is per-browser/per-device. If multiple staff
+   need to see the same shared data, this single-file app would need
+   a backend added (see chat for details).
+--------------------------------------------------------- */
+
+const STORAGE_KEY = "gearTrackerData_v2"; // bumped so any old cached demo data is ignored and the app starts blank
+const REAL_TODAY = new Date().toISOString().slice(0,10);
+
+function uid(prefix){ return prefix + "_" + Math.random().toString(36).slice(2,9); }
+function addDays(dateStr, n){
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function daysBetween(a,b){ // b - a in days
+  return Math.round((new Date(b+"T00:00:00") - new Date(a+"T00:00:00")) / 86400000);
+}
+function fmt(dateStr){
+  if(!dateStr) return "—";
+  const d = new Date(dateStr+"T00:00:00");
+  return d.toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"numeric"});
+}
+
+// ---------- starting data: blank slate, ready for real inventory & events ----------
+function buildSeed(){
+  return {
+    equipment: [],
+    events: [],
+    bookings: [],
+    retirements: []
+  };
+}
+
+function loadData(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(raw){
+    try{
+      const parsed = JSON.parse(raw);
+      if(!parsed.retirements) parsed.retirements = []; // migrate older saved data
+      return parsed;
+    }catch(e){ /* fall through to reseed */ }
+  }
+  const seed = buildSeed();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
+  return seed;
+}
+function saveData(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }
+
+let DATA = loadData();
+
+// ---------------- core domain helpers ----------------
+function getEquipment(id){ return DATA.equipment.find(e=>e.id===id); }
+function getEvent(id){ return DATA.events.find(e=>e.id===id); }
+
+// Effective occupied window for a booking: [start, end)
+// start = actual checkout date if set, else event's start date
+// end   = actual checkin date if set, else null (still occupying -> unavailable indefinitely, incl. overdue)
+function bookingWindow(bk){
+  const ev = getEvent(bk.eventId);
+  const start = bk.checkOutDate || (ev ? ev.start : null);
+  const end = bk.checkInDate || null;
+  return {start, end};
+}
+function bookingOccupiesDate(bk, dateStr){
+  if(bk.status === "checked_in"){
+    // was out only between checkout and checkin
+    const {start,end} = bookingWindow(bk);
+    if(!start || !end) return false;
+    return dateStr >= start && dateStr < end;
+  }
+  // booked or checked_out: occupies from its start onward, indefinitely if not returned
+  const {start} = bookingWindow(bk);
+  if(!start) return false;
+  return dateStr >= start;
+}
+
+function availabilityForDate(dateStr, excludeBookingId){
+  // returns array of {equipment, total, occupied, available, occupiedBy:[{event, qty, bookingStatus}]}
+  return DATA.equipment.map(eq=>{
+    const occ = DATA.bookings.filter(bk=>bk.equipmentId===eq.id && bk.id!==excludeBookingId && bookingOccupiesDate(bk,dateStr));
+    const occupiedQty = occ.reduce((s,bk)=>s+Number(bk.qty),0);
+    const occupiedBy = occ.map(bk=>({
+      event: getEvent(bk.eventId),
+      qty: bk.qty,
+      status: bk.status,
+      since: bk.checkOutDate || (getEvent(bk.eventId)||{}).start
+    }));
+    return {
+      equipment: eq,
+      total: eq.qty,
+      occupied: occupiedQty,
+      available: Math.max(0, eq.qty - occupiedQty),
+      occupiedBy
+    };
+  });
+}
+
+function isOverdue(bk, asOf){
+  // A booking is overdue if it's not checked in, and the event's end date has passed as-of the viewing date
+  if(bk.status === "checked_in") return false;
+  const ev = getEvent(bk.eventId);
+  if(!ev) return false;
+  return asOf > ev.end;
+}
+
+function computeAlerts(asOf){
+  const alerts = [];
+
+  // 1. Overdue returns: gear from past events not yet checked in
+  DATA.bookings.forEach(bk=>{
+    if(isOverdue(bk, asOf)){
+      const ev = getEvent(bk.eventId);
+      const eq = getEquipment(bk.equipmentId);
+      const daysLate = daysBetween(ev.end, asOf);
+      alerts.push({
+        type:"overdue",
+        severity: daysLate >= 4 ? "bad" : "warn",
+        text: `${eq.name} (x${bk.qty}) from "${ev.name}" (ended ${fmt(ev.end)}) has not been checked in — ${daysLate} day${daysLate===1?"":"s"} overdue.`
+      });
+    }
+  });
+
+  // 2. Upcoming events within next 4 days where required gear isn't available because it hasn't been returned
+  DATA.events.forEach(ev=>{
+    const daysOut = daysBetween(asOf, ev.start);
+    if(daysOut < 0 || daysOut > 4) return; // only "4 days out" window (today..+4)
+    const lines = DATA.bookings.filter(bk=>bk.eventId===ev.id);
+    lines.forEach(bk=>{
+      if(bk.status === "checked_in" || bk.status === "checked_out") return; // already sorted for this event
+      const eq = getEquipment(bk.equipmentId);
+      // exclude this booking's own demand so it doesn't compete against itself
+      const avail = availabilityForDate(ev.start, bk.id).find(a=>a.equipment.id===eq.id);
+      if(avail.available < bk.qty){
+        // find what's holding up the gear (an unreturned/uncompleted booking of same equipment, elsewhere)
+        const blockers = avail.occupiedBy.filter(o=>o.event.id !== ev.id);
+        const notReturned = blockers.filter(o=>o.status === "checked_out");
+        const blockerText = blockers.map(b=>`"${b.event.name}" (${b.status==='checked_out'?'out since '+fmt(b.since):'also booked'})`).join(", ");
+        alerts.push({
+          type:"shortage",
+          severity:"bad",
+          text: `"${ev.name}" is in ${daysOut} day${daysOut===1?"":"s"} (${fmt(ev.start)}) and needs ${bk.qty}x ${eq.name}, but only ${avail.available} available` +
+                (notReturned.length ? ` — still checked out to ${blockerText} and not returned.` : (blockerText ? ` — ${blockerText}.` : "."))
+        });
+      }
+    });
+  });
+
+  return alerts;
+}
+
+// ---------------- rendering ----------------
+const views = document.querySelectorAll(".view");
+document.getElementById("tabs").addEventListener("click", e=>{
+  if(e.target.tagName !== "BUTTON") return;
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.remove("active"));
+  e.target.classList.add("active");
+  const v = e.target.dataset.view;
+  views.forEach(vv=>vv.classList.toggle("active", vv.id === "view-"+v));
+  renderAll();
+});
+
+function currentAsOf(){ return document.getElementById("asOfDate").value || REAL_TODAY; }
+
+function toast(msg){
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2200);
+}
+
+function renderDashboard(){
+  const asOf = currentAsOf();
+  const alerts = computeAlerts(asOf);
+  const box = document.getElementById("alertsBox");
+  box.innerHTML = alerts.length ? alerts.map(a=>`
+    <div class="alert ${a.severity}">
+      <span>${a.severity==="bad" ? "🔴" : "🟡"}</span>
+      <div>${a.text}</div>
+    </div>`).join("") : `<div class="empty">No alerts as of ${fmt(asOf)}. All gear is on track. ✅</div>`;
+
+  // stat cards
+  const totalUnits = DATA.equipment.reduce((s,e)=>s+e.qty,0);
+  const avail = availabilityForDate(asOf);
+  const outNow = avail.reduce((s,a)=>s+a.occupied,0);
+  const overdueCount = DATA.bookings.filter(bk=>isOverdue(bk, asOf)).length;
+  const upcoming4 = DATA.events.filter(ev=>{const d=daysBetween(asOf,ev.start); return d>=0 && d<=4;}).length;
+
+  document.getElementById("statCards").innerHTML = `
+    <div class="stat"><div class="num">${totalUnits}</div><div class="lbl">Total gear units owned</div></div>
+    <div class="stat ${outNow>0?'warn':''}"><div class="num">${outNow}</div><div class="lbl">Units currently checked out (as of ${fmt(asOf)})</div></div>
+    <div class="stat ${overdueCount>0?'bad':''}"><div class="num">${overdueCount}</div><div class="lbl">Overdue bookings not checked in</div></div>
+  `;
+
+  // upcoming events table
+  const upcoming = DATA.events
+    .filter(ev=>ev.start >= asOf || ev.end >= asOf)
+    .sort((a,b)=>a.start.localeCompare(b.start))
+    .slice(0,8);
+  document.getElementById("upcomingEventsBody").innerHTML = upcoming.map(ev=>{
+    const d = daysBetween(asOf, ev.start);
+    const tag = d===0 ? '<span class="today-tag">TODAY</span>' : (d>0 && d<=4 ? `<span class="badge warn">in ${d}d</span>` : "");
+    return `<tr><td>${ev.name}</td><td>${fmt(ev.start)}${ev.end!==ev.start?" – "+fmt(ev.end):""} ${tag}</td><td>${ev.location}</td><td>${eventGearStatus(ev,asOf)}</td></tr>`;
+  }).join("") || `<tr><td colspan="4" class="empty">No upcoming events</td></tr>`;
+
+  // currently checked out table
+  const out = DATA.bookings.filter(bk=>bk.status==="checked_out");
+  document.getElementById("checkedOutBody").innerHTML = out.map(bk=>{
+    const eq = getEquipment(bk.equipmentId), ev = getEvent(bk.eventId);
+    return `<tr><td>${eq.name}</td><td>${bk.qty}</td><td>${ev.name}</td><td>${fmt(bk.checkOutDate)}</td></tr>`;
+  }).join("") || `<tr><td colspan="4" class="empty">Nothing checked out</td></tr>`;
+}
+
+function eventGearStatus(ev, asOf){
+  const lines = DATA.bookings.filter(bk=>bk.eventId===ev.id);
+  if(lines.length===0) return `<span class="badge neutral">No gear booked</span>`;
+  if(lines.every(l=>l.status==="checked_in")) return `<span class="badge ok">Returned</span>`;
+  if(lines.some(l=>l.status==="checked_out")) return `<span class="badge info">Gear out</span>`;
+  return `<span class="badge neutral">Booked</span>`;
+}
+
+function renderAvailability(){
+  const dateInput = document.getElementById("checkDate");
+  const dateStr = dateInput.value || currentAsOf();
+  const data = availabilityForDate(dateStr);
+  document.getElementById("availabilityBody").innerHTML = data.map(row=>{
+    const pct = row.total ? Math.round((row.available/row.total)*100) : 0;
+    const barClass = row.available===0 ? "none" : (pct<=30 ? "low" : "");
+    const bookedTo = row.occupiedBy.length
+      ? `<div class="pill-list">${row.occupiedBy.map(o=>`<span>${o.event.name} (x${o.qty}${o.status==='checked_out'?', out':o.status==='booked'?', booked':''})</span>`).join("")}</div>`
+      : `<span class="muted">—</span>`;
+    return `<tr>
+      <td><strong>${row.equipment.name}</strong><div class="muted" style="font-size:11px;">${row.equipment.category}</div></td>
+      <td>${row.total}</td>
+      <td>${row.available} / ${row.total}<div class="avail-bar ${barClass}"><div style="width:${pct}%"></div></div></td>
+      <td>${bookedTo}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="4" class="empty">No equipment yet — add some on the Equipment tab.</td></tr>`;
+}
+
+function populateEventSelect(){
+  const sel = document.getElementById("bookEventSelect");
+  const current = sel.value;
+  sel.innerHTML = `<option value="__new">+ Create new event…</option>` +
+    DATA.events.slice().sort((a,b)=>a.start.localeCompare(b.start)).map(ev=>`<option value="${ev.id}">${ev.name} (${fmt(ev.start)})</option>`).join("");
+  sel.value = current && [...sel.options].some(o=>o.value===current) ? current : "__new";
+  document.getElementById("newEventFields").style.display = sel.value === "__new" ? "block" : "none";
+}
+
+let bookingLineCount = 0;
+function addBookingLine(){
+  if(DATA.equipment.length === 0) return; // nothing to book yet
+  bookingLineCount++;
+  const id = "line_"+bookingLineCount;
+  const div = document.createElement("div");
+  div.className = "booking-line";
+  div.id = id;
+  div.innerHTML = `
+    <select class="line-eq">${DATA.equipment.map(e=>`<option value="${e.id}">${e.name}</option>`).join("")}</select>
+    <input type="number" class="line-qty" min="1" value="1">
+    <span class="line-avail muted" style="font-size:12px;"></span>
+    <button class="link-btn" onclick="document.getElementById('${id}').remove()">remove</button>
+  `;
+  document.getElementById("bookingLines").appendChild(div);
+  div.querySelector(".line-eq").addEventListener("change", updateLineAvailability);
+  div.querySelector(".line-qty").addEventListener("input", updateLineAvailability);
+  updateLineAvailability.call(div.querySelector(".line-eq"));
+}
+function updateLineAvailability(){
+  if(!this) return;
+  const line = this.closest(".booking-line");
+  if(!line) return;
+  const eqId = line.querySelector(".line-eq").value;
+  if(!eqId){ line.querySelector(".line-avail").textContent = ""; return; }
+  const startInput = document.getElementById("newEventStart");
+  const sel = document.getElementById("bookEventSelect");
+  let dateStr;
+  if(sel.value === "__new"){ dateStr = startInput.value || currentAsOf(); }
+  else { const ev = getEvent(sel.value); dateStr = ev ? ev.start : currentAsOf(); }
+  const avail = availabilityForDate(dateStr).find(a=>a.equipment.id===eqId);
+  if(!avail){ line.querySelector(".line-avail").textContent = ""; return; }
+  line.querySelector(".line-avail").textContent = `${avail.available} available on ${fmt(dateStr)}`;
+}
+
+function renderBookingForm(){
+  populateEventSelect();
+  const container = document.getElementById("bookingLines");
+  const addBtn = document.getElementById("addLineBtn");
+  if(DATA.equipment.length === 0){
+    container.innerHTML = `<div class="empty">No equipment yet — add some on the Equipment tab first, then come back here to build a booking.</div>`;
+    addBtn.disabled = true;
+    return;
+  }
+  addBtn.disabled = false;
+  const existingLines = container.querySelectorAll(".booking-line");
+  if(existingLines.length===0){ container.innerHTML = ""; addBookingLine(); }
+  else existingLines.forEach(line=>updateLineAvailability.call(line.querySelector(".line-eq")));
+}
+
+function renderCheckInOut(){
+  const evSel = document.getElementById("filterEvent");
+  const currentEv = evSel.value;
+  evSel.innerHTML = `<option value="">All events</option>` + DATA.events.map(ev=>`<option value="${ev.id}">${ev.name}</option>`).join("");
+  evSel.value = currentEv;
+
+  const statusFilter = document.getElementById("filterStatus").value;
+  const eventFilter = document.getElementById("filterEvent").value;
+
+  let rows = DATA.bookings.slice().sort((a,b)=> getEvent(a.eventId).start.localeCompare(getEvent(b.eventId).start));
+  if(statusFilter) rows = rows.filter(bk=>bk.status===statusFilter);
+  if(eventFilter) rows = rows.filter(bk=>bk.eventId===eventFilter);
+
+  document.getElementById("bookingsBody").innerHTML = rows.map(bk=>{
+    const eq = getEquipment(bk.equipmentId), ev = getEvent(bk.eventId);
+    const badge = bk.status==="checked_out" ? '<span class="badge warn">Checked out</span>'
+      : bk.status==="checked_in" ? '<span class="badge ok">Checked in</span>'
+      : '<span class="badge neutral">Booked</span>';
+    const overdue = isOverdue(bk, currentAsOf());
+    const actions = [];
+    if(bk.status!=="checked_out" && bk.status!=="checked_in"){
+      actions.push(`<input type="text" class="mini-input co-name" id="con_${bk.id}" placeholder="Checked out by">`);
+      actions.push(`<input type="text" class="mini-input co-contact" id="cop_${bk.id}" placeholder="Phone / email">`);
+      actions.push(`<button class="btn small amber" onclick="doCheckOut('${bk.id}')">Check out</button>`);
+    }
+    if(bk.status==="checked_out"){
+      actions.push(`<input type="number" class="checkin-qty" id="ciq_${bk.id}" min="1" max="${bk.qty}" value="${bk.qty}" title="Qty returning" style="width:52px;">`);
+      actions.push(`<input type="text" class="mini-input ci-name" id="cin_${bk.id}" placeholder="Checked in by">`);
+      actions.push(`<input type="text" class="mini-input ci-contact" id="cip_${bk.id}" placeholder="Phone / email">`);
+      actions.push(`<button class="btn small green" onclick="doCheckIn('${bk.id}')">Check in</button>`);
+      actions.push(`<button class="btn small ghost" onclick="undoCheckOut('${bk.id}')">Undo check-out</button>`);
+    }
+    if(bk.status==="checked_in"){
+      actions.push(`<button class="btn small ghost" onclick="undoCheckIn('${bk.id}')">Undo check-in</button>`);
+    }
+    const outCell = bk.checkOutDate
+      ? `${fmt(bk.checkOutDate)}${bk.checkedOutBy ? `<div class="who">by ${bk.checkedOutBy}${bk.checkedOutContact?" ("+bk.checkedOutContact+")":""}</div>` : ""}`
+      : "—";
+    const inCell = bk.checkInDate
+      ? `${fmt(bk.checkInDate)}${bk.checkedInBy ? `<div class="who">by ${bk.checkedInBy}${bk.checkedInContact?" ("+bk.checkedInContact+")":""}</div>` : ""}`
+      : "—";
+    return `<tr>
+      <td>${ev.name}${overdue?' <span class="badge bad">overdue</span>':''}</td>
+      <td>${eq.name}</td>
+      <td>${bk.qty}</td>
+      <td>${fmt(ev.start)}${ev.end!==ev.start?" – "+fmt(ev.end):""}</td>
+      <td>${badge}</td>
+      <td>${outCell}</td>
+      <td>${inCell}</td>
+      <td><div class="actions-cell">${actions.join("")}</div></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8" class="empty">No bookings match this filter</td></tr>`;
+}
+
+function doCheckOut(bkId){
+  const bk = DATA.bookings.find(b=>b.id===bkId);
+  const nameInput = document.getElementById("con_"+bkId);
+  const contactInput = document.getElementById("cop_"+bkId);
+  bk.status = "checked_out";
+  bk.checkOutDate = currentAsOf();
+  bk.checkedOutBy = nameInput ? nameInput.value.trim() : "";
+  bk.checkedOutContact = contactInput ? contactInput.value.trim() : "";
+  saveData(); renderAll();
+  toast("Checked out.");
+}
+function doCheckIn(bkId){
+  const bk = DATA.bookings.find(b=>b.id===bkId);
+  const qtyInput = document.getElementById("ciq_"+bkId);
+  const nameInput = document.getElementById("cin_"+bkId);
+  const contactInput = document.getElementById("cip_"+bkId);
+  let qty = qtyInput ? Number(qtyInput.value) : bk.qty;
+  if(!qty || qty <= 0 || isNaN(qty)){ toast("Enter a valid quantity to check in."); return; }
+  if(qty > bk.qty) qty = bk.qty;
+  const checkedInBy = nameInput ? nameInput.value.trim() : "";
+  const checkedInContact = contactInput ? contactInput.value.trim() : "";
+
+  if(qty >= bk.qty){
+    // full return
+    bk.status = "checked_in";
+    bk.checkInDate = currentAsOf();
+    bk.checkedInBy = checkedInBy;
+    bk.checkedInContact = checkedInContact;
+    toast("Checked in — welcome back!");
+  } else {
+    // partial return: split off the returned units into their own checked-in booking,
+    // the rest stays checked out under the original booking until it comes back too.
+    DATA.bookings.push({
+      id: uid("bk"),
+      eventId: bk.eventId,
+      equipmentId: bk.equipmentId,
+      qty: qty,
+      status: "checked_in",
+      checkOutDate: bk.checkOutDate,
+      checkInDate: currentAsOf(),
+      checkedOutBy: bk.checkedOutBy,
+      checkedOutContact: bk.checkedOutContact,
+      checkedInBy: checkedInBy,
+      checkedInContact: checkedInContact
+    });
+    bk.qty = bk.qty - qty;
+    toast(`Checked in ${qty} — ${bk.qty} still out.`);
+  }
+  saveData(); renderAll();
+}
+function undoCheckOut(bkId){
+  const bk = DATA.bookings.find(b=>b.id===bkId);
+  bk.status = "booked";
+  bk.checkOutDate = null;
+  saveData(); renderAll();
+  toast("Check-out undone.");
+}
+function undoCheckIn(bkId){
+  const bk = DATA.bookings.find(b=>b.id===bkId);
+  bk.status = "checked_out";
+  bk.checkInDate = null;
+  saveData(); renderAll();
+}
+
+function renderInventory(){
+  const dateInput = document.getElementById("invDate");
+  const dateStr = dateInput.value || currentAsOf();
+  const data = availabilityForDate(dateStr);
+  document.getElementById("inventoryBody").innerHTML = data.map(row=>{
+    const detail = row.occupiedBy.length
+      ? row.occupiedBy.map(o=>`${o.qty}x → <strong>${o.event.name}</strong> (${o.event.location}), out since ${fmt(o.since)}${o.status==='booked'?' <span class="badge neutral" style="font-size:10px;">planned</span>':''}`).join("<br>")
+      : `<span class="muted">All units in storage</span>`;
+    return `<tr>
+      <td><strong>${row.equipment.name}</strong></td>
+      <td>${row.total}</td>
+      <td>${row.available}</td>
+      <td>${row.occupied}</td>
+      <td>${detail}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="5" class="empty">No equipment yet — add some on the Equipment tab.</td></tr>`;
+}
+
+function renderEquipment(){
+  document.getElementById("equipmentBody").innerHTML = DATA.equipment.map(eq=>`
+    <tr>
+      <td>${eq.name}</td>
+      <td>${eq.category}</td>
+      <td>${eq.qty}</td>
+      <td class="muted">${eq.notes||""}</td>
+      <td>
+        <button class="btn small red" onclick="retireUnit('${eq.id}')" title="Remove 1 unit from stock (broken, sold, lost)">Retire 1 unit</button>
+        <button class="link-btn" style="margin-left:8px;" onclick="deleteEquipment('${eq.id}')">delete</button>
+      </td>
+    </tr>`).join("") || `<tr><td colspan="5" class="empty">No equipment added yet — use the form below to add your first item.</td></tr>`;
+
+  const retirements = (DATA.retirements||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById("retirementsBody").innerHTML = retirements.map(rt=>{
+    const eq = getEquipment(rt.equipmentId);
+    return `<tr><td>${fmt(rt.date)}</td><td>${eq ? eq.name : "(deleted item)"}</td><td>${rt.reason}</td><td class="muted">${rt.note||""}</td></tr>`;
+  }).join("") || `<tr><td colspan="4" class="empty">No retirements logged yet</td></tr>`;
+}
+
+function retireUnit(eqId){
+  const eq = getEquipment(eqId);
+  if(!eq) return;
+  const avail = availabilityForDate(currentAsOf()).find(a=>a.equipment.id===eqId);
+  if(avail.available <= 0){
+    alert(`No ${eq.name} units currently in storage to retire (all ${eq.total} are booked/out). Check a unit in first, then retire it.`);
+    return;
+  }
+  const reason = prompt(`Retire 1x ${eq.name} from stock.\n\nReason? (e.g. Broken, Sold, Lost, Other)`, "Broken");
+  if(reason === null) return; // cancelled
+  const note = prompt("Optional note (condition, buyer, price, etc.):", "") || "";
+  eq.qty -= 1;
+  DATA.retirements = DATA.retirements || [];
+  DATA.retirements.push({id:uid("rt"), equipmentId:eqId, date:currentAsOf(), reason: reason.trim() || "Other", note: note.trim()});
+  saveData(); renderAll();
+  toast(`Retired 1x ${eq.name}. New total: ${eq.qty}.`);
+}
+
+function deleteEquipment(id){
+  if(DATA.bookings.some(bk=>bk.equipmentId===id)){
+    if(!confirm("This equipment has bookings attached. Delete anyway (bookings will be removed too)?")) return;
+    DATA.bookings = DATA.bookings.filter(bk=>bk.equipmentId!==id);
+  }
+  DATA.equipment = DATA.equipment.filter(e=>e.id!==id);
+  saveData(); renderAll();
+}
+
+function renderEvents(){
+  document.getElementById("eventsBody").innerHTML = DATA.events.slice().sort((a,b)=>a.start.localeCompare(b.start)).map(ev=>{
+    const lines = DATA.bookings.filter(bk=>bk.eventId===ev.id);
+    const gear = lines.length ? lines.map(l=>`${l.qty}x ${getEquipment(l.equipmentId).name}`).join(", ") : "—";
+    return `<tr><td>${ev.name}</td><td>${fmt(ev.start)}</td><td>${fmt(ev.end)}</td><td>${ev.location}</td><td class="muted" style="font-size:12px;">${gear}</td>
+      <td><button class="btn small ghost" onclick="openCheckoutSheet('${ev.id}')" ${lines.length?"":"disabled"}>🖨 Check-out sheet</button></td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="empty">No events added yet — use the form below to add your first event.</td></tr>`;
+}
+
+// Builds and opens a printable check-out / sign-off sheet for all gear booked to an event.
+function openCheckoutSheet(eventId){
+  const ev = getEvent(eventId);
+  if(!ev) return;
+  const lines = DATA.bookings.filter(bk=>bk.eventId===eventId);
+  if(lines.length===0){ toast("No gear booked to this event yet."); return; }
+
+  const anyOut = lines.find(l=>l.checkedOutBy);
+  const staffName = anyOut ? (anyOut.checkedOutBy||"") : "";
+  const staffContact = anyOut ? (anyOut.checkedOutContact||"") : "";
+
+  const rowsHtml = lines.map(l=>{
+    const eq = getEquipment(l.equipmentId);
+    const statusLabel = l.status==="checked_out" ? "Checked out" : l.status==="checked_in" ? "Returned" : "To be checked out";
+    return `<tr><td>${eq ? eq.name : "(deleted item)"}</td><td style="text-align:center;">${l.qty}</td><td>${statusLabel}</td></tr>`;
+  }).join("");
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Check-Out Sheet — ${ev.name}</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#22262e;padding:36px;max-width:760px;margin:0 auto;}
+  h1{font-size:18px;margin:0 0 2px;}
+  h2{font-size:22px;margin:2px 0 4px;}
+  .meta{color:#555;font-size:13px;margin-bottom:20px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:28px;}
+  th,td{border:1px solid #ccc;padding:8px 10px;font-size:13px;text-align:left;}
+  th{background:#f2f2f2;}
+  .sign-section{margin-top:30px;}
+  .sign-row{display:flex;gap:24px;margin-bottom:26px;}
+  .sign-field{flex:1;}
+  .sign-field label{display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.3px;margin-bottom:22px;}
+  .sign-line{border-bottom:1px solid #333;height:0;}
+  .terms{font-size:11.5px;color:#555;margin-top:24px;border-top:1px solid #ccc;padding-top:12px;}
+  @media print{ body{padding:16px;} }
+</style>
+</head>
+<body>
+  <h1>Event Gear Tracker — Check-Out Summary</h1>
+  <h2>${ev.name}</h2>
+  <div class="meta">${fmt(ev.start)}${ev.end!==ev.start ? " – "+fmt(ev.end) : ""} &middot; ${ev.location}</div>
+
+  <table>
+    <thead><tr><th>Equipment</th><th>Qty</th><th>Status</th></tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+
+  <div class="sign-section">
+    <p>By signing below, both parties confirm the equipment listed above has been handed over in good working condition and is expected back by <strong>${fmt(ev.end)}</strong>.</p>
+
+    <div class="sign-row">
+      <div class="sign-field">
+        <label>Issued by (staff) — ${staffName || "name"}</label>
+        <div class="sign-line"></div>
+      </div>
+      <div class="sign-field">
+        <label>Date</label>
+        <div class="sign-line"></div>
+      </div>
+    </div>
+    <div class="sign-row">
+      <div class="sign-field">
+        <label>Received by (contact) — ${staffContact || "phone / email"}</label>
+        <div class="sign-line"></div>
+      </div>
+      <div class="sign-field">
+        <label>Date</label>
+        <div class="sign-line"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="terms">Please return all equipment clean and in the condition it was issued. Report any damage immediately. Late or missing items may incur a replacement fee.</div>
+
+  <script>window.onload = function(){ window.print(); };<\/script>
+</body></html>`;
+
+  const w = window.open("", "_blank");
+  if(!w){ toast("Please allow pop-ups to open the check-out sheet."); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+function renderAll(){
+  renderDashboard();
+  renderAvailability();
+  renderBookingForm();
+  renderCheckInOut();
+  renderInventory();
+  renderEquipment();
+  renderEvents();
+}
+
+// ---------------- event wiring ----------------
+document.getElementById("asOfDate").value = REAL_TODAY;
+document.getElementById("checkDate").value = REAL_TODAY;
+document.getElementById("invDate").value = REAL_TODAY;
+document.getElementById("asOfDate").addEventListener("change", renderAll);
+document.getElementById("checkDate").addEventListener("input", renderAvailability);
+document.getElementById("invDate").addEventListener("input", renderInventory);
+document.getElementById("filterStatus").addEventListener("change", renderCheckInOut);
+document.getElementById("filterEvent").addEventListener("change", renderCheckInOut);
+document.getElementById("addLineBtn").addEventListener("click", addBookingLine);
+document.getElementById("bookEventSelect").addEventListener("change", ()=>{
+  document.getElementById("newEventFields").style.display = document.getElementById("bookEventSelect").value === "__new" ? "block" : "none";
+  document.getElementById("bookingLines").querySelectorAll(".booking-line").forEach(line=>updateLineAvailability.call(line.querySelector(".line-eq")));
+});
+document.getElementById("newEventStart").addEventListener("input", ()=>{
+  document.getElementById("bookingLines").querySelectorAll(".booking-line").forEach(line=>updateLineAvailability.call(line.querySelector(".line-eq")));
+});
+
+document.getElementById("createBookingBtn").addEventListener("click", ()=>{
+  const sel = document.getElementById("bookEventSelect");
+  let eventId = sel.value;
+  const msg = document.getElementById("bookingMsg");
+
+  if(eventId === "__new"){
+    const name = document.getElementById("newEventName").value.trim();
+    const start = document.getElementById("newEventStart").value;
+    const end = document.getElementById("newEventEnd").value || start;
+    const location = document.getElementById("newEventLocation").value.trim();
+    if(!name || !start){ msg.textContent = "Please enter an event name and start date."; msg.style.color="var(--red)"; return; }
+    eventId = uid("ev");
+    DATA.events.push({id:eventId, name, start, end, location: location || "TBC"});
+  }
+
+  const lines = [...document.getElementById("bookingLines").querySelectorAll(".booking-line")].map(line=>({
+    equipmentId: line.querySelector(".line-eq").value,
+    qty: Number(line.querySelector(".line-qty").value)
+  })).filter(l=>l.equipmentId && l.qty>0);
+
+  if(lines.length===0){ msg.textContent = "Add at least one equipment line."; msg.style.color="var(--red)"; return; }
+
+  // validate availability
+  const ev = getEvent(eventId);
+  const problems = [];
+  lines.forEach(l=>{
+    const avail = availabilityForDate(ev.start).find(a=>a.equipment.id===l.equipmentId);
+    if(avail.available < l.qty) problems.push(`${avail.equipment.name}: only ${avail.available} available, requested ${l.qty}`);
+  });
+  if(problems.length){
+    msg.innerHTML = "⚠️ Not enough stock — " + problems.join("; ") + ". You can still book, but consider adjusting quantities.";
+    msg.style.color = "var(--red)";
+  } else {
+    msg.textContent = "Booking created ✅";
+    msg.style.color = "var(--green)";
+  }
+
+  lines.forEach(l=>{
+    DATA.bookings.push({id:uid("bk"), eventId, equipmentId:l.equipmentId, qty:l.qty, status:"booked", checkOutDate:null, checkInDate:null});
+  });
+  saveData();
+
+  document.getElementById("bookingLines").innerHTML = "";
+  document.getElementById("newEventName").value = "";
+  document.getElementById("newEventLocation").value = "";
+  addBookingLine();
+  renderAll();
+  toast("Booking saved.");
+});
+
+document.getElementById("addEqBtn").addEventListener("click", ()=>{
+  const name = document.getElementById("eqName").value.trim();
+  const category = document.getElementById("eqCategory").value.trim() || "General";
+  const qty = Number(document.getElementById("eqQty").value) || 1;
+  const notes = document.getElementById("eqNotes").value.trim();
+  if(!name) return;
+  DATA.equipment.push({id:uid("eq"), name, category, qty, notes});
+  saveData();
+  document.getElementById("eqName").value = "";
+  document.getElementById("eqCategory").value = "";
+  document.getElementById("eqQty").value = 1;
+  document.getElementById("eqNotes").value = "";
+  renderAll();
+  toast("Equipment added.");
+});
+
+document.getElementById("addEvBtn").addEventListener("click", ()=>{
+  const name = document.getElementById("evName").value.trim();
+  const start = document.getElementById("evStart").value;
+  const end = document.getElementById("evEnd").value || start;
+  const location = document.getElementById("evLocation").value.trim() || "TBC";
+  if(!name || !start) return;
+  DATA.events.push({id:uid("ev"), name, start, end, location});
+  saveData();
+  document.getElementById("evName").value = "";
+  document.getElementById("evStart").value = "";
+  document.getElementById("evEnd").value = "";
+  document.getElementById("evLocation").value = "";
+  renderAll();
+  toast("Event added.");
+});
+
+document.getElementById("resetDataBtn").addEventListener("click", ()=>{
+  if(!confirm("This will permanently erase ALL equipment, events and bookings and start blank. This cannot be undone. Continue?")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  DATA = loadData();
+  renderAll();
+  toast("All data cleared.");
+});
+
+renderAll();
+</script>
+</body>
+</html>
