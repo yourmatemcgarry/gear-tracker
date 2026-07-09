@@ -288,6 +288,9 @@ function fmt(dateStr){
   const d = new Date(dateStr+"T00:00:00");
   return d.toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"numeric"});
 }
+function escapeAttr(str){
+  return String(str).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
 
 // ---------- starting data: blank slate, ready for real inventory & events ----------
 function blankDoc(){
@@ -734,24 +737,66 @@ function renderInventory(){
   }).join("") || `<tr><td colspan="5" class="empty">No equipment yet — add some on the Equipment tab.</td></tr>`;
 }
 
+let editingEquipmentId = null;
+
 function renderEquipment(){
-  document.getElementById("equipmentBody").innerHTML = DATA.equipment.map(eq=>`
-    <tr>
+  document.getElementById("equipmentBody").innerHTML = DATA.equipment.map(eq=>{
+    if(eq.id === editingEquipmentId){
+      return `<tr>
+        <td><input type="text" class="mini-input" id="editName_${eq.id}" value="${escapeAttr(eq.name)}" style="width:150px;" onkeydown="if(event.key==='Enter') saveEditEquipment('${eq.id}'); if(event.key==='Escape') cancelEditEquipment();"></td>
+        <td><input type="text" class="mini-input" id="editCategory_${eq.id}" value="${escapeAttr(eq.category)}" style="width:110px;" onkeydown="if(event.key==='Enter') saveEditEquipment('${eq.id}'); if(event.key==='Escape') cancelEditEquipment();"></td>
+        <td>${eq.qty}</td>
+        <td><input type="text" class="mini-input" id="editNotes_${eq.id}" value="${escapeAttr(eq.notes||"")}" style="width:170px;" onkeydown="if(event.key==='Enter') saveEditEquipment('${eq.id}'); if(event.key==='Escape') cancelEditEquipment();"></td>
+        <td>
+          <button class="btn small green" onclick="saveEditEquipment('${eq.id}')">Save</button>
+          <button class="btn small ghost" onclick="cancelEditEquipment()">Cancel</button>
+        </td>
+      </tr>`;
+    }
+    return `<tr>
       <td>${eq.name}</td>
       <td>${eq.category}</td>
       <td>${eq.qty}</td>
       <td class="muted">${eq.notes||""}</td>
       <td>
+        <button class="btn small ghost" onclick="startEditEquipment('${eq.id}')">Edit</button>
         <button class="btn small red" onclick="retireUnit('${eq.id}')" title="Remove 1 unit from stock (broken, sold, lost)">Retire 1 unit</button>
         <button class="link-btn" style="margin-left:8px;" onclick="deleteEquipment('${eq.id}')">delete</button>
       </td>
-    </tr>`).join("") || `<tr><td colspan="5" class="empty">No equipment added yet — use the form below to add your first item.</td></tr>`;
+    </tr>`;
+  }).join("") || `<tr><td colspan="5" class="empty">No equipment added yet — use the form below to add your first item.</td></tr>`;
 
   const retirements = (DATA.retirements||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
   document.getElementById("retirementsBody").innerHTML = retirements.map(rt=>{
     const eq = getEquipment(rt.equipmentId);
     return `<tr><td>${fmt(rt.date)}</td><td>${eq ? eq.name : "(deleted item)"}</td><td>${rt.reason}</td><td class="muted">${rt.note||""}</td></tr>`;
   }).join("") || `<tr><td colspan="4" class="empty">No retirements logged yet</td></tr>`;
+}
+
+function startEditEquipment(id){
+  editingEquipmentId = id;
+  renderEquipment();
+}
+
+function cancelEditEquipment(){
+  editingEquipmentId = null;
+  renderEquipment();
+}
+
+function saveEditEquipment(id){
+  const eq = getEquipment(id);
+  if(!eq) return;
+  const nameInput = document.getElementById("editName_"+id);
+  const categoryInput = document.getElementById("editCategory_"+id);
+  const notesInput = document.getElementById("editNotes_"+id);
+  const name = nameInput.value.trim();
+  if(!name){ toast("Name can't be empty."); return; }
+  eq.name = name;
+  eq.category = categoryInput.value.trim() || "General";
+  eq.notes = notesInput.value.trim();
+  editingEquipmentId = null;
+  renderAll(); saveData();
+  toast("Equipment updated.");
 }
 
 function retireUnit(eqId){
