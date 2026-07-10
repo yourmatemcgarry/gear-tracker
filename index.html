@@ -74,6 +74,16 @@
   select.qty{width:70px;}
   .booking-line{display:grid;grid-template-columns:2fr 100px 1fr auto;gap:8px;align-items:end;margin-bottom:8px;}
   .today-tag{background:var(--amber);color:#fff;font-size:10.5px;padding:1px 6px;border-radius:4px;margin-left:6px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:12px;}
+  .cal-daylabel{font-size:11px;color:var(--muted);text-transform:uppercase;text-align:center;padding:4px 0;font-weight:600;}
+  .cal-cell{border:1px solid var(--border);border-radius:6px;min-height:88px;padding:6px;font-size:11.5px;background:#fff;overflow:hidden;}
+  .cal-cell.other-month{background:#f7f8fa;}
+  .cal-cell.other-month .cal-daynum{color:#c7cbd4;}
+  .cal-cell.today{border-color:var(--amber);border-width:2px;}
+  .cal-daynum{font-weight:700;color:var(--navy);font-size:12px;margin-bottom:3px;}
+  .cal-event{background:#e8ecf6;color:var(--navy);border-radius:4px;padding:1px 5px;margin-bottom:2px;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+  .cal-outcount{font-size:10px;color:var(--muted);margin-top:2px;}
+  @media(max-width:800px){ .cal-grid{grid-template-columns:repeat(7,minmax(34px,1fr));} .cal-cell{min-height:60px;font-size:10px;padding:3px;} }
   .actions-cell{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:230px;}
   .mini-input{width:96px;padding:6px 8px;font-size:12px;}
   .who{font-size:11px;color:var(--muted);margin-top:2px;}
@@ -102,6 +112,7 @@
   <button data-view="inventory">Where's My Gear</button>
   <button data-view="equipment">Equipment</button>
   <button data-view="events">Events</button>
+  <button data-view="calendar">Calendar</button>
 </nav>
 
 <main>
@@ -278,6 +289,23 @@
         <div class="field"><label>Location</label><input id="evLocation" placeholder="e.g. Town Square"></div>
         <button class="btn amber" id="addEvBtn">Add</button>
       </div>
+    </div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div class="view" id="view-calendar">
+    <div class="card">
+      <div class="flex-between">
+        <h2>Calendar</h2>
+        <div class="row" style="align-items:center;">
+          <button class="btn small ghost" id="calPrevBtn">‹ Prev</button>
+          <div id="calMonthLabel" style="min-width:140px;text-align:center;font-weight:600;color:var(--navy);"></div>
+          <button class="btn small ghost" id="calNextBtn">Next ›</button>
+          <button class="btn small ghost" id="calTodayBtn">Today</button>
+        </div>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:4px;">Shows events by date and how many gear units are out that day. Click an event to jump to it.</div>
+      <div id="calGrid" class="cal-grid"></div>
     </div>
   </div>
 
@@ -942,34 +970,154 @@ function deleteEquipment(id){
   renderAll(); saveData();
 }
 
+let managingEventId = null;
+
 function renderEvents(){
   document.getElementById("eventsBody").innerHTML = DATA.events.slice().sort((a,b)=>a.start.localeCompare(b.start)).map(ev=>{
     const lines = DATA.bookings.filter(bk=>bk.eventId===ev.id);
-    const gear = lines.length ? lines.map(l=>`${l.qty}x ${getEquipment(l.equipmentId).name}`).join(", ") : "—";
-    return `<tr><td>${ev.name}</td><td>${fmt(ev.start)}</td><td>${fmt(ev.end)}</td><td>${ev.location}</td><td class="muted" style="font-size:12px;">${gear}</td>
-      <td><button class="btn small ghost" onclick="openCheckoutSheet('${ev.id}')" ${lines.length?"":"disabled"}>🖨 Check-out sheet</button></td></tr>`;
+    const gear = lines.length ? lines.map(l=>`${l.qty}x ${getEquipment(l.equipmentId) ? getEquipment(l.equipmentId).name : "(deleted item)"}`).join(", ") : "—";
+    const row = `<tr>
+      <td>${ev.name}</td><td>${fmt(ev.start)}</td><td>${fmt(ev.end)}</td><td>${ev.location}</td>
+      <td class="muted" style="font-size:12px;">${gear}</td>
+      <td>
+        <button class="btn small ghost" onclick="toggleManageEvent('${ev.id}')">${managingEventId===ev.id ? "Close" : "Manage"}</button>
+        <button class="btn small ghost" onclick="openCheckoutSheet('${ev.id}')" ${lines.length?"":"disabled"}>🖨 Sheet</button>
+      </td>
+    </tr>`;
+    return managingEventId === ev.id ? row + renderEventManagePanel(ev, lines) : row;
   }).join("") || `<tr><td colspan="6" class="empty">No events added yet — use the form below to add your first event.</td></tr>`;
 }
 
-// Builds and opens a printable check-out / sign-off sheet for all gear booked to an event.
+function toggleManageEvent(evId){
+  managingEventId = managingEventId === evId ? null : evId;
+  renderEvents();
+}
+
+// Expandable panel under an event row: add/remove gear lines, plus attach scanned sheets.
+function renderEventManagePanel(ev, lines){
+  const lineRows = lines.map(l=>{
+    const eq = getEquipment(l.equipmentId);
+    const badge = l.status==="checked_out" ? '<span class="badge warn">Checked out</span>'
+      : l.status==="checked_in" ? '<span class="badge ok">Checked in</span>'
+      : '<span class="badge neutral">Booked</span>';
+    return `<div class="row" style="margin-bottom:6px;align-items:center;">
+      <span style="min-width:170px;">${eq ? eq.name : "(deleted item)"}</span>
+      <input type="number" class="mini-input" id="egQty_${l.id}" min="1" value="${l.qty}" style="width:70px;">
+      <button class="btn small ghost" onclick="updateEventGearQty('${l.id}')">Update qty</button>
+      ${badge}
+      <button class="link-btn" onclick="removeEventGearLine('${l.id}')">remove</button>
+    </div>`;
+  }).join("");
+
+  const addRow = DATA.equipment.length
+    ? `<div class="row" style="margin-top:8px;align-items:center;">
+        <select id="egNewEquipment_${ev.id}" style="min-width:170px;">${DATA.equipment.map(e=>`<option value="${e.id}">${e.name}</option>`).join("")}</select>
+        <input type="number" id="egNewQty_${ev.id}" min="1" value="1" style="width:70px;">
+        <button class="btn small amber" onclick="addEventGearLine('${ev.id}')">+ Add item</button>
+      </div>`
+    : `<div class="muted">Add equipment on the Equipment tab first.</div>`;
+
+  const attachments = ev.attachments || [];
+  const attachmentList = attachments.length
+    ? attachments.map(a=>`<div class="row" style="align-items:center;margin-bottom:4px;">
+        <a href="${a.dataUrl}" target="_blank" rel="noopener" style="font-size:12.5px;">${escapeAttr(a.filename)}</a>
+        <span class="muted" style="font-size:11px;">(${fmt(a.uploadedDate)})</span>
+        <button class="link-btn" onclick="removeAttachment('${ev.id}','${a.id}')">remove</button>
+      </div>`).join("")
+    : `<div class="muted" style="font-size:12.5px;">No scans attached yet.</div>`;
+
+  return `<tr><td colspan="6" style="background:#f7f8fa;">
+    <div style="padding:10px 6px;">
+      <div style="font-size:12.5px;font-weight:600;color:var(--navy);margin-bottom:6px;">Gear booked to this event</div>
+      ${lineRows || '<div class="muted" style="margin-bottom:6px;">No gear booked to this event yet.</div>'}
+      ${addRow}
+      <div style="font-size:12.5px;font-weight:600;color:var(--navy);margin:16px 0 6px;">Attached scans (signed sheets, etc.)</div>
+      ${attachmentList}
+      <input type="file" accept="image/*,.pdf" style="font-size:12px;margin-top:4px;" onchange="handleAttachmentUpload('${ev.id}', this)">
+    </div>
+  </td></tr>`;
+}
+
+function updateEventGearQty(bkId){
+  const bk = DATA.bookings.find(b=>b.id===bkId);
+  if(!bk) return;
+  const input = document.getElementById("egQty_"+bkId);
+  const qty = Number(input.value);
+  if(!qty || qty<=0){ toast("Enter a valid quantity."); return; }
+  if(bk.status !== "booked" && !confirm("This item has already been checked out or in — changing the quantity will affect that record. Continue?")) return;
+  bk.qty = qty;
+  renderAll(); saveData();
+  toast("Quantity updated.");
+}
+
+function removeEventGearLine(bkId){
+  const bk = DATA.bookings.find(b=>b.id===bkId);
+  if(!bk) return;
+  const msg = bk.status !== "booked"
+    ? "This item has already been checked out or in. Remove it from this event anyway?"
+    : "Remove this item from the event?";
+  if(!confirm(msg)) return;
+  DATA.bookings = DATA.bookings.filter(b=>b.id!==bkId);
+  renderAll(); saveData();
+  toast("Removed.");
+}
+
+function addEventGearLine(evId){
+  const sel = document.getElementById("egNewEquipment_"+evId);
+  const qtyInput = document.getElementById("egNewQty_"+evId);
+  if(!sel || !qtyInput) return;
+  const equipmentId = sel.value;
+  const qty = Number(qtyInput.value);
+  if(!equipmentId || !qty || qty<=0){ toast("Choose equipment and a valid quantity."); return; }
+  DATA.bookings.push({id:uid("bk"), eventId:evId, equipmentId, qty, status:"booked", checkOutDate:null, checkInDate:null});
+  renderAll(); saveData();
+  toast("Item added to event.");
+}
+
+// Reads a scanned image/PDF as a data URL and attaches it to the event for reference.
+function handleAttachmentUpload(evId, inputEl){
+  const file = inputEl.files[0];
+  if(!file) return;
+  if(file.size > 5*1024*1024 && !confirm("This file is larger than 5MB and may slow things down since it's stored with the rest of your data. Attach anyway?")){
+    inputEl.value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const ev = getEvent(evId);
+    if(!ev) return;
+    ev.attachments = ev.attachments || [];
+    ev.attachments.push({ id: uid("att"), filename: file.name, dataUrl: reader.result, uploadedDate: currentAsOf() });
+    inputEl.value = "";
+    renderAll(); saveData();
+    toast("Scan attached.");
+  };
+  reader.onerror = () => toast("Could not read that file — try again.");
+  reader.readAsDataURL(file);
+}
+
+function removeAttachment(evId, attId){
+  const ev = getEvent(evId);
+  if(!ev || !ev.attachments) return;
+  if(!confirm("Remove this attached scan?")) return;
+  ev.attachments = ev.attachments.filter(a=>a.id!==attId);
+  renderAll(); saveData();
+}
+
+// Builds and opens a single printable sheet used for BOTH check-out and check-in sign-off.
 function openCheckoutSheet(eventId){
   const ev = getEvent(eventId);
   if(!ev) return;
   const lines = DATA.bookings.filter(bk=>bk.eventId===eventId);
   if(lines.length===0){ toast("No gear booked to this event yet."); return; }
 
-  const anyOut = lines.find(l=>l.checkedOutBy);
-  const staffName = anyOut ? (anyOut.checkedOutBy||"") : "";
-  const staffContact = anyOut ? (anyOut.checkedOutContact||"") : "";
-
   const rowsHtml = lines.map(l=>{
     const eq = getEquipment(l.equipmentId);
-    const statusLabel = l.status==="checked_out" ? "Checked out" : l.status==="checked_in" ? "Returned" : "To be checked out";
-    return `<tr><td>${eq ? eq.name : "(deleted item)"}</td><td style="text-align:center;">${l.qty}</td><td>${statusLabel}</td></tr>`;
+    return `<tr><td>${eq ? eq.name : "(deleted item)"}</td><td style="text-align:center;">${l.qty}</td></tr>`;
   }).join("");
 
   const html = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>Check-Out Sheet — ${ev.name}</title>
+<html><head><meta charset="UTF-8"><title>Gear Sheet — ${ev.name}</title>
 <style>
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:#22262e;padding:36px;max-width:760px;margin:0 auto;}
   h1{font-size:18px;margin:0 0 2px;}
@@ -978,7 +1126,8 @@ function openCheckoutSheet(eventId){
   table{width:100%;border-collapse:collapse;margin-bottom:28px;}
   th,td{border:1px solid #ccc;padding:8px 10px;font-size:13px;text-align:left;}
   th{background:#f2f2f2;}
-  .sign-section{margin-top:30px;}
+  .sign-section{margin-top:26px;}
+  .sign-section h3{font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--navy,#1b2a4a);border-bottom:1px solid #ccc;padding-bottom:6px;margin-bottom:16px;}
   .sign-row{display:flex;gap:24px;margin-bottom:26px;}
   .sign-field{flex:1;}
   .sign-field label{display:block;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.3px;margin-bottom:22px;}
@@ -988,37 +1137,38 @@ function openCheckoutSheet(eventId){
 </style>
 </head>
 <body>
-  <h1>Event Gear Tracker — Check-Out Summary</h1>
+  <h1>Event Gear Tracker — Gear Sheet</h1>
   <h2>${ev.name}</h2>
   <div class="meta">${fmt(ev.start)}${ev.end!==ev.start ? " – "+fmt(ev.end) : ""} &middot; ${ev.location}</div>
 
   <table>
-    <thead><tr><th>Equipment</th><th>Qty</th><th>Status</th></tr></thead>
+    <thead><tr><th>Equipment</th><th>Qty</th></tr></thead>
     <tbody>${rowsHtml}</tbody>
   </table>
 
   <div class="sign-section">
+    <h3>Check-out</h3>
     <p>By signing below, both parties confirm the equipment listed above has been handed over in good working condition and is expected back by <strong>${fmt(ev.end)}</strong>.</p>
-
     <div class="sign-row">
-      <div class="sign-field">
-        <label>Issued by (staff) — ${staffName || "name"}</label>
-        <div class="sign-line"></div>
-      </div>
-      <div class="sign-field">
-        <label>Date</label>
-        <div class="sign-line"></div>
-      </div>
+      <div class="sign-field"><label>Issued by (staff)</label><div class="sign-line"></div></div>
+      <div class="sign-field"><label>Date</label><div class="sign-line"></div></div>
     </div>
     <div class="sign-row">
-      <div class="sign-field">
-        <label>Received by (contact) — ${staffContact || "phone / email"}</label>
-        <div class="sign-line"></div>
-      </div>
-      <div class="sign-field">
-        <label>Date</label>
-        <div class="sign-line"></div>
-      </div>
+      <div class="sign-field"><label>Received by (contact)</label><div class="sign-line"></div></div>
+      <div class="sign-field"><label>Date</label><div class="sign-line"></div></div>
+    </div>
+  </div>
+
+  <div class="sign-section">
+    <h3>Check-in</h3>
+    <p>By signing below, both parties confirm the equipment listed above has been returned and checked.</p>
+    <div class="sign-row">
+      <div class="sign-field"><label>Returned by (contact)</label><div class="sign-line"></div></div>
+      <div class="sign-field"><label>Date</label><div class="sign-line"></div></div>
+    </div>
+    <div class="sign-row">
+      <div class="sign-field"><label>Received back by (staff)</label><div class="sign-line"></div></div>
+      <div class="sign-field"><label>Date</label><div class="sign-line"></div></div>
     </div>
   </div>
 
@@ -1028,7 +1178,7 @@ function openCheckoutSheet(eventId){
 </body></html>`;
 
   const w = window.open("", "_blank");
-  if(!w){ toast("Please allow pop-ups to open the check-out sheet."); return; }
+  if(!w){ toast("Please allow pop-ups to open the sheet."); return; }
   w.document.open();
   w.document.write(html);
   w.document.close();
@@ -1043,6 +1193,64 @@ function renderAll(){
   renderManualHolds();
   renderEquipment();
   renderEvents();
+  renderCalendar();
+}
+
+// ---------------- calendar ----------------
+let calMonth = new Date();
+calMonth.setDate(1);
+
+function renderCalendar(){
+  const year = calMonth.getFullYear();
+  const month = calMonth.getMonth();
+  document.getElementById("calMonthLabel").textContent = calMonth.toLocaleDateString(undefined,{month:"long", year:"numeric"});
+
+  const firstOfMonth = new Date(year, month, 1);
+  const startWeekday = firstOfMonth.getDay(); // 0 = Sunday
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  const cells = [];
+  for(let i=0;i<startWeekday;i++){
+    cells.push({ dayNum: daysInPrevMonth - startWeekday + 1 + i, otherMonth: true });
+  }
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    cells.push({ dateStr, dayNum: d, otherMonth: false });
+  }
+  let trailing = 1;
+  while(cells.length % 7 !== 0){ cells.push({ dayNum: trailing++, otherMonth: true }); }
+
+  const dayLabels = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>`<div class="cal-daylabel">${d}</div>`).join("");
+
+  const cellsHtml = cells.map(c=>{
+    if(c.otherMonth){
+      return `<div class="cal-cell other-month"><div class="cal-daynum">${c.dayNum}</div></div>`;
+    }
+    const dateStr = c.dateStr;
+    const eventsToday = DATA.events.filter(ev=>dateStr >= ev.start && dateStr <= ev.end);
+    const avail = availabilityForDate(dateStr);
+    const unitsOut = avail.reduce((s,a)=>s+a.occupied,0);
+    const isToday = dateStr === REAL_TODAY;
+    const eventChips = eventsToday.map(ev=>
+      `<div class="cal-event" title="${escapeAttr(ev.name)} — ${escapeAttr(ev.location)}" onclick="jumpToEvent('${ev.id}')">${ev.name}</div>`
+    ).join("");
+    return `<div class="cal-cell ${isToday?'today':''}">
+      <div class="cal-daynum">${c.dayNum}</div>
+      ${eventChips}
+      ${unitsOut>0 ? `<div class="cal-outcount">${unitsOut} unit${unitsOut===1?"":"s"} out</div>` : ""}
+    </div>`;
+  }).join("");
+
+  document.getElementById("calGrid").innerHTML = dayLabels + cellsHtml;
+}
+
+function jumpToEvent(evId){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.remove("active"));
+  document.querySelector('#tabs button[data-view="events"]').classList.add("active");
+  document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active", v.id==="view-events"));
+  managingEventId = evId;
+  renderAll();
 }
 
 // ---------------- event wiring ----------------
@@ -1176,6 +1384,10 @@ document.getElementById("resetDataBtn").addEventListener("click", ()=>{
   saveData();
   toast("All data cleared.");
 });
+
+document.getElementById("calPrevBtn").addEventListener("click", ()=>{ calMonth.setMonth(calMonth.getMonth()-1); renderCalendar(); });
+document.getElementById("calNextBtn").addEventListener("click", ()=>{ calMonth.setMonth(calMonth.getMonth()+1); renderCalendar(); });
+document.getElementById("calTodayBtn").addEventListener("click", ()=>{ calMonth = new Date(); calMonth.setDate(1); renderCalendar(); });
 
 // ---------------- initial load + keeping everyone in sync ----------------
 async function init(){
